@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Valeria - Amiga Virtual</title>
+
+  <!-- SDK oficial de Telegram Mini Apps -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Cliente Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* Header */
+    .header { background: #1e293b; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; }
+    .user-info { display: flex; align-items: center; gap: 12px; }
+    .avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #8b5cf6); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: #fff; }
+    .details h3 { font-size: 16px; font-weight: 600; }
+    .details p { font-size: 12px; color: #10b981; }
+
+    /* Área de Chat */
+    .chat-messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .message { max-width: 82%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.45; word-wrap: break-word; }
+    .message.user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 2px; }
+    .message.bot { align-self: flex-start; background: #334155; color: #f8fafc; border-bottom-left-radius: 2px; }
+
+    .typing { font-size: 12px; color: #94a3b8; font-style: italic; display: none; padding: 0 16px 8px; }
+
+    /* Formulario de Entrada */
+    .chat-input { display: flex; padding: 12px; background: #0f172a; border-top: 1px solid #334155; gap: 8px; }
+    .chat-input input { flex: 1; padding: 12px 16px; border-radius: 24px; border: 1px solid #334155; background: #1e293b; color: #fff; outline: none; font-size: 14px; }
+    .chat-input button { background: #ec4899; color: #fff; border: none; padding: 0 18px; border-radius: 24px; font-weight: bold; cursor: pointer; }
+    .chat-input button:disabled, .chat-input input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Modal Paywall (Mercado Pago Colombia) */
+    .paywall-overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(6px); display: none; flex-direction: column; justify-content: center; align-items: center; padding: 24px; text-align: center; z-index: 100; }
+    .paywall-card { background: #1e293b; padding: 28px 20px; border-radius: 20px; border: 1px solid #334155; max-width: 340px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    .paywall-icon { font-size: 48px; margin-bottom: 12px; }
+    .paywall-title { font-size: 20px; font-weight: bold; margin-bottom: 8px; color: #fff; }
+    .paywall-desc { font-size: 13px; color: #94a3b8; margin-bottom: 20px; line-height: 1.5; }
+    .paywall-methods { font-size: 11px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
+    .paywall-btn { width: 100%; background: linear-gradient(135deg, #009ee3, #0072bb); color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 15px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="user-info">
+      <div class="avatar">V</div>
+      <div class="details">
+        <h3>Valeria</h3>
+        <p>🟢 En línea</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor del Paywall -->
+  <div class="paywall-overlay" id="paywall">
+    <div class="paywall-card">
+      <div class="paywall-icon">👑</div>
+      <div class="paywall-title">Suscripción Requerida</div>
+      <div class="paywall-desc">Para hablar sin límites con Valeria activa tu membresía mensual.</div>
+      <div class="paywall-methods">💳 Paga con PSE, Nequi, Tarjetas o Efecty</div>
+      <button class="paywall-btn" id="pay-btn" onclick="iniciarPago()">Pagar con Mercado Pago</button>
+    </div>
+  </div>
+
+  <!-- Mensajes de Chat -->
+  <div class="chat-messages" id="messages"></div>
+
+  <!-- Indicador de Escritura -->
+  <div class="typing" id="typing">Valeria está escribiendo...</div>
+
+  <!-- Entrada de Texto -->
+  <form class="chat-input" id="chat-form">
+    <input type="text" id="user-input" placeholder="Escribe un mensaje..." autocomplete="off" required />
+    <button type="submit" id="send-btn">Enviar</button>
+  </form>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+    }
+
+    const socket = io();
+    let currentTelegramId = null;
+
+    const messages = document.getElementById('messages');
+    const input = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const paywall = document.getElementById('paywall');
+    const payBtn = document.getElementById('pay-btn');
+    const typing = document.getElementById('typing');
+
+    function scrollToBottom() {
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function agregarMensaje(texto, tipo) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${tipo}`;
+      msgDiv.textContent = texto;
+      messages.appendChild(msgDiv);
+      scrollToBottom();
+    }
+
+    // Inicialización del usuario
+    async function initApp() {
+      const initData = tg?.initData || '';
+
+      try {
+        const res = await fetch('/api/user-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telegramInitData: initData })
+        });
+
+        const data = await res.json();
+
+        if (data.user) {
+          currentTelegramId = data.user.id;
+          socket.emit('autenticar', { telegramId: currentTelegramId });
+
+          if (!data.isSubscribed) {
+            bloquearChat();
+          } else {
+            desbloquearChat();
+          }
+        }
+      } catch (err) {
+        console.error('Error al iniciar la Mini App:', err);
+      }
+    }
+
+    function bloquearChat() {
+      paywall.style.display = 'flex';
+      input.disabled = true;
+      sendBtn.disabled = true;
+    }
+
+    function desbloquearChat() {
+      paywall.style.display = 'none';
+      input.disabled = false;
+      sendBtn.disabled = false;
+    }
+
+    // Procesar pago con Mercado Pago
+    async function iniciarPago() {
+      if (!currentTelegramId) return alert('No se detectó un usuario válido de Telegram.');
+
+      payBtn.textContent = 'Generando pago...';
+      payBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/crear-preferencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telegramId: currentTelegramId })
+        });
+
+        const data = await res.json();
+
+        if (data.init_point) {
+          if (tg && tg.openLink) {
+            tg.openLink(data.init_point);
+          } else {
+            window.location.href = data.init_point;
+          }
+        } else {
+          alert('Error al generar el enlace de pago.');
+        }
+      } catch (e) {
+        alert('Error al conectar con la pasarela de pago.');
+      } finally {
+        payBtn.textContent = 'Pagar con Mercado Pago';
+        payBtn.disabled = false;
+      }
+    }
+
+    // Eventos de Socket.io
+    socket.on('status_suscripcion', (data) => {
+      if (data.active) {
+        desbloquearChat();
+      } else {
+        bloquearChat();
+      }
+    });
+
+    socket.on('cargar_historial', (historial) => {
+      messages.innerHTML = '';
+      if (!historial || historial.length === 0) {
+        agregarMensaje('¡Hola! 😊 Soy Valeria. Me alegra mucho hablar contigo. ¿Cómo va tu día?', 'bot');
+      } else {
+        historial.forEach((msg) => {
+          agregarMensaje(msg.content, msg.role === 'user' ? 'user' : 'bot');
+        });
+      }
+    });
+
+    socket.on('respuesta_bot', (data) => {
+      typing.style.display = 'none';
+      agregarMensaje(data.texto, 'bot');
+    });
+
+    socket.on('typing', (isTyping) => {
+      typing.style.display = isTyping ? 'block' : 'none';
+      if (isTyping) scrollToBottom();
+    });
+
+    // Envío de mensaje
+    document.getElementById('chat-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const texto = input.value.trim();
+      if (!texto) return;
+
+      agregarMensaje(texto, 'user');
+      socket.emit('mensaje_usuario', { texto });
+
+      input.value = '';
+      typing.style.display = 'block';
+      scrollToBottom();
+    });
+
+    initApp();
+  </script>
+</body>
+</html>

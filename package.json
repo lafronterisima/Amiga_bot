@@ -1,0 +1,19 @@
+{
+  "name": "valeria-bot",
+  "version": "1.0.0",
+  "description": "Sistema completo de Amiga Virtual con Telegram Mini App, Stripe y OpenAI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "openai": "^4.20.1",
+    "socket.io": "^4.7.2",
+    "stripe": "^14.7.0"
+  }
+}

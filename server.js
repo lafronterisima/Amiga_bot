@@ -24,15 +24,21 @@ const preferenceClient = new Preference(mpClient);
 const paymentClient = new Payment(mpClient);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Set en memoria para control de idempotencia del Webhook
+// Control de idempotencia del Webhook en memoria
 const processedPayments = new Set();
 
-// --- FUNCIONES DE UTILIDAD ---
+// --- UTILIDADES ---
 
-// Validar firma criptográfica oficial de Telegram Web App
+// Validar la firma criptográfica oficial de Telegram Web App
 function verifyTelegramWebAppData(telegramInitData) {
-  if (!telegramInitData) return null;
-  
+  if (!telegramInitData) {
+    // Si estás en desarrollo y fuera de Telegram, permite probar localmente
+    if (process.env.NODE_ENV === 'development') {
+      return { id: 123456789, first_name: 'DevUser', username: 'devuser' };
+    }
+    return null;
+  }
+
   try {
     const urlParams = new URLSearchParams(telegramInitData);
     const hash = urlParams.get('hash');
@@ -40,7 +46,6 @@ function verifyTelegramWebAppData(telegramInitData) {
 
     urlParams.delete('hash');
 
-    // Ordenar claves alfabéticamente según spec oficial de Telegram
     const params = [];
     for (const [key, value] of urlParams.entries()) {
       params.push(`${key}=${value}`);
@@ -67,7 +72,7 @@ function verifyTelegramWebAppData(telegramInitData) {
   }
 }
 
-// Verificar suscripción activa
+// Verificar si el usuario tiene suscripción activa
 async function checkActiveSubscription(telegramId) {
   const { data: user } = await supabase.from('users').select('id').eq('telegram_id', telegramId).single();
   if (!user) return false;
@@ -77,7 +82,7 @@ async function checkActiveSubscription(telegramId) {
     .select('status, current_period_end')
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .single();
+    .maybeSingle();
 
   if (!sub) return false;
   return new Date(sub.current_period_end) > new Date();
@@ -96,9 +101,9 @@ app.post('/api/user-status', async (req, res) => {
 
     await supabase.from('users').upsert({
       telegram_id: tgUser.id,
-      first_name: tgUser.first_name,
-      last_name: tgUser.last_name,
-      username: tgUser.username
+      first_name: tgUser.first_name || 'Usuario',
+      last_name: tgUser.last_name || '',
+      username: tgUser.username || ''
     }, { onConflict: 'telegram_id' });
 
     const isSubscribed = await checkActiveSubscription(tgUser.id);
@@ -115,7 +120,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
     const tgUser = verifyTelegramWebAppData(telegramInitData);
 
     if (!tgUser) {
-      return res.status(401).json({ error: 'No autorizado' });
+      return res.status(401).json({ error: 'No autorizado o sesión de Telegram expirada' });
     }
 
     const preference = await preferenceClient.create({
@@ -125,15 +130,15 @@ app.post('/api/crear-preferencia', async (req, res) => {
             id: 'valeria_sub_mensual',
             title: 'Suscripción Mensual - Valeria Virtual',
             quantity: 1,
-            unit_price: 39900,
+            unit_price: 19900,
             currency_id: 'COP'
           }
         ],
-        external_reference: tgUser.id.toString(),
+        external_reference: String(tgUser.id),
         back_urls: {
-          success: `${process.env.FRONTEND_URL}?payment=success`,
-          failure: `${process.env.FRONTEND_URL}?payment=failure`,
-          pending: `${process.env.FRONTEND_URL}?payment=pending`
+          success: `${process.env.FRONTEND_URL || 'https://t.me'}?payment=success`,
+          failure: `${process.env.FRONTEND_URL || 'https://t.me'}?payment=failure`,
+          pending: `${process.env.FRONTEND_URL || 'https://t.me'}?payment=pending`
         },
         auto_return: 'approved',
         notification_url: `${process.env.BACKEND_URL}/api/webhook/mercadopago`
@@ -147,9 +152,8 @@ app.post('/api/crear-preferencia', async (req, res) => {
   }
 });
 
-// WEBHOOK OPTIMIZADO (ANTIBLOQUEOS)
+// WEBHOOK OPTIMIZADO (Sin bloqueos)
 app.post('/api/webhook/mercadopago', async (req, res) => {
-  // 1. Responder de inmediato 200 OK a Mercado Pago para liberar el hilo
   res.sendStatus(200);
 
   const { type, data } = req.body;
@@ -157,14 +161,11 @@ app.post('/api/webhook/mercadopago', async (req, res) => {
   if (type === 'payment' && data?.id) {
     const paymentId = data.id;
 
-    // Control de Idempotencia: Ignorar si ya fue procesado o se está procesando
     if (processedPayments.has(paymentId)) return;
     processedPayments.add(paymentId);
 
-    // Mantenimiento del Set (limpiar pagos antiguos de memoria tras 1 hora)
     setTimeout(() => processedPayments.delete(paymentId), 3600000);
 
-    // Procesar asincrónicamente
     setImmediate(async () => {
       try {
         const paymentInfo = await paymentClient.get({ id: paymentId });
@@ -190,7 +191,6 @@ app.post('/api/webhook/mercadopago', async (req, res) => {
                 current_period_end: expirationDate.toISOString()
               }, { onConflict: 'user_id' });
 
-              // Notificar vía Socket al canal del usuario
               io.to(`user_${telegramId}`).emit('status_suscripcion', { active: true });
             }
           }
@@ -202,12 +202,11 @@ app.post('/api/webhook/mercadopago', async (req, res) => {
   }
 });
 
-// --- COMUNICACIÓN POR SOCKET.IO (CON AUTENTICACIÓN SEGURA) ---
+// --- COMUNICACIÓN SOCKET.IO ---
 
 io.on('connection', (socket) => {
 
   socket.on('autenticar', async ({ telegramInitData }) => {
-    // Validar autenticidad de los datos enviados vía Socket
     const tgUser = verifyTelegramWebAppData(telegramInitData);
 
     if (!tgUser) {
@@ -217,7 +216,6 @@ io.on('connection', (socket) => {
     socket.telegramId = tgUser.id;
     socket.join(`user_${tgUser.id}`);
 
-    // Cargar historial inicial
     const { data: messages } = await supabase
       .from('chat_messages')
       .select('role, content, created_at')
@@ -239,14 +237,14 @@ io.on('connection', (socket) => {
       return socket.emit('status_suscripcion', { active: false });
     }
 
-    // 1. Guardar mensaje de usuario
+    // Guardar mensaje de usuario
     await supabase.from('chat_messages').insert({
       telegram_id: telegramId,
       role: 'user',
       content: texto
     });
 
-    // 2. Obtener historial reciente
+    // Obtener historial
     const { data: history } = await supabase
       .from('chat_messages')
       .select('role, content')
@@ -262,7 +260,10 @@ io.on('connection', (socket) => {
     try {
       socket.emit('typing', true);
 
-      const formattedHistory = (history || []).map(m => ({ role: m.role, content: m.content }));
+      const formattedHistory = (history || []).map(m => ({ 
+        role: m.role === 'assistant' || m.role === 'bot' ? 'assistant' : 'user', 
+        content: m.content 
+      }));
 
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -272,7 +273,7 @@ io.on('connection', (socket) => {
 
       const respuestaBot = completion.choices[0].message.content;
 
-      // 3. Guardar respuesta del asistente
+      // Guardar respuesta del asistente
       await supabase.from('chat_messages').insert({
         telegram_id: telegramId,
         role: 'assistant',
@@ -284,15 +285,14 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error generando respuesta de OpenAI:', err);
       socket.emit('typing', false);
+      socket.emit('error_servidor', 'Ocurrió un problema generando la respuesta');
     }
   });
 
-  socket.on('disconnect', () => {
-    // Limpieza al desconectar
-  });
+  socket.on('disconnect', () => {});
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Servidor de Valeria ejecutándose en el puerto ${PORT}`);
+  console.log(`Servidor ejecutándose en el puerto ${PORT}`);
 });

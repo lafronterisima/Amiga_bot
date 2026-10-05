@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
   <title>Valeria - Amiga Virtual</title>
 
   <!-- SDK oficial de Telegram Mini Apps -->
@@ -11,49 +12,446 @@
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-    /* Header */
-    .header { background: #1e293b; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; }
-    .user-info { display: flex; align-items: center; gap: 12px; }
-    .avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #8b5cf6); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: #fff; }
-    .details h3 { font-size: 16px; font-weight: 600; }
-    .details p { font-size: 12px; color: #10b981; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
 
-    /* Área de Chat */
-    .chat-messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .message { max-width: 82%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.45; word-wrap: break-word; }
-    .message.user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 2px; }
-    .message.bot { align-self: flex-start; background: #334155; color: #f8fafc; border-bottom-left-radius: 2px; }
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+    }
 
-    .typing { font-size: 12px; color: #94a3b8; font-style: italic; display: none; padding: 0 16px 8px; }
+    /* ========== Header ========== */
+    .header {
+      background: #1e293b;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+    }
 
-    /* Formulario de Entrada */
-    .chat-input { display: flex; padding: 12px; background: #0f172a; border-top: 1px solid #334155; gap: 8px; }
-    .chat-input input { flex: 1; padding: 12px 16px; border-radius: 24px; border: 1px solid #334155; background: #1e293b; color: #fff; outline: none; font-size: 14px; }
-    .chat-input button { background: #ec4899; color: #fff; border: none; padding: 0 18px; border-radius: 24px; font-weight: bold; cursor: pointer; }
-    .chat-input button:disabled, .chat-input input:disabled { opacity: 0.5; cursor: not-allowed; }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
 
-    /* Modal Paywall (Mercado Pago Colombia) */
-    .paywall-overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(6px); display: none; flex-direction: column; justify-content: center; align-items: center; padding: 24px; text-align: center; z-index: 100; }
-    .paywall-card { background: #1e293b; padding: 28px 20px; border-radius: 20px; border: 1px solid #334155; max-width: 340px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-    .paywall-icon { font-size: 48px; margin-bottom: 12px; }
-    .paywall-title { font-size: 20px; font-weight: bold; margin-bottom: 8px; color: #fff; }
-    .paywall-desc { font-size: 13px; color: #94a3b8; margin-bottom: 20px; line-height: 1.5; }
-    .paywall-methods { font-size: 11px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
-    .paywall-btn { width: 100%; background: linear-gradient(135deg, #009ee3, #0072bb); color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 15px; cursor: pointer; }
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ec4899, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+      color: #fff;
+      position: relative;
+    }
+
+    .avatar.online::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 2px solid #1e293b;
+    }
+
+    .details h3 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .details p {
+      font-size: 12px;
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .details p.offline {
+      color: #94a3b8;
+    }
+
+    .details p .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* ========== Chat ========== */
+    .chat-messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+
+    .message {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.45;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.bot {
+      align-self: flex-start;
+      background: #334155;
+      color: #f8fafc;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.system {
+      align-self: center;
+      background: #1e293b;
+      color: #94a3b8;
+      font-size: 12px;
+      font-style: italic;
+      padding: 6px 12px;
+      max-width: 90%;
+    }
+
+    .message-time {
+      display: block;
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    /* ========== Typing indicator ========== */
+    .typing {
+      font-size: 12px;
+      color: #94a3b8;
+      font-style: italic;
+      display: none;
+      padding: 0 20px 8px;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .typing.visible {
+      display: flex;
+    }
+
+    .typing-dots {
+      display: inline-flex;
+      gap: 3px;
+    }
+
+    .typing-dots span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #94a3b8;
+      animation: bounce 1.2s infinite;
+    }
+
+    .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-4px); opacity: 1; }
+    }
+
+    /* ========== Input ========== */
+    .chat-input {
+      display: flex;
+      padding: 12px;
+      background: #0f172a;
+      border-top: 1px solid #334155;
+      gap: 8px;
+      flex-shrink: 0;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 24px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #fff;
+      outline: none;
+      font-size: 16px; /* 16px previene zoom en iOS */
+      min-width: 0;
+    }
+
+    .chat-input input:focus {
+      border-color: #ec4899;
+    }
+
+    .chat-input button {
+      background: #ec4899;
+      color: #fff;
+      border: none;
+      padding: 0 20px;
+      border-radius: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 14px;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+
+    .chat-input button:active {
+      opacity: 0.7;
+    }
+
+    .chat-input button:disabled,
+    .chat-input input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ========== Paywall ========== */
+    .paywall-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      text-align: center;
+      z-index: 100;
+    }
+
+    .paywall-overlay.visible {
+      display: flex;
+    }
+
+    .paywall-card {
+      background: #1e293b;
+      padding: 28px 20px;
+      border-radius: 20px;
+      border: 1px solid #334155;
+      max-width: 340px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+
+    .paywall-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .paywall-title {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .paywall-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .paywall-price {
+      font-size: 24px;
+      font-weight: bold;
+      color: #ec4899;
+      margin-bottom: 12px;
+    }
+
+    .paywall-price small {
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: normal;
+    }
+
+    .paywall-features {
+      list-style: none;
+      text-align: left;
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #0f172a;
+      border-radius: 12px;
+    }
+
+    .paywall-features li {
+      font-size: 13px;
+      color: #cbd5e1;
+      padding: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .paywall-features li::before {
+      content: '✓';
+      color: #10b981;
+      font-weight: bold;
+    }
+
+    .paywall-methods {
+      font-size: 11px;
+      color: #38bdf8;
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    .paywall-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #009ee3, #0072bb);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: bold;
+      font-size: 15px;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    .paywall-btn:active {
+      transform: scale(0.98);
+    }
+
+    .paywall-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .paywall-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: #64748b;
+      font-size: 22px;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background 0.15s;
+    }
+
+    .paywall-close:hover {
+      background: #334155;
+      color: #fff;
+    }
+
+    /* ========== Toast ========== */
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 13px;
+      border: 1px solid #334155;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ========== Connection banner ========== */
+    .connection-banner {
+      display: none;
+      background: #78350f;
+      color: #fbbf24;
+      font-size: 12px;
+      text-align: center;
+      padding: 6px;
+      flex-shrink: 0;
+    }
+
+    .connection-banner.visible {
+      display: block;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Banner de conexión -->
+  <div class="connection-banner" id="connection-banner">
+    ⚠️ Reconectando al servidor...
+  </div>
+
   <!-- Header -->
   <div class="header">
     <div class="user-info">
-      <div class="avatar">V</div>
+      <div class="avatar" id="avatar">V</div>
       <div class="details">
-        <h3>Valeria</h3>
-        <p>🟢 En línea</p>
+        <h3 id="bot-name">Valeria</h3>
+        <p id="bot-status">
+          <span class="dot"></span>
+          <span id="bot-status-text">En línea</span>
+        </p>
       </div>
     </div>
   </div>
@@ -61,9 +459,17 @@
   <!-- Contenedor del Paywall -->
   <div class="paywall-overlay" id="paywall">
     <div class="paywall-card">
+      <button class="paywall-close" onclick="cerrarPaywall()" aria-label="Cerrar">×</button>
       <div class="paywall-icon">👑</div>
       <div class="paywall-title">Suscripción Requerida</div>
       <div class="paywall-desc">Para hablar sin límites con Valeria activa tu membresía mensual.</div>
+      <div class="paywall-price">$19.900 <small>COP / mes</small></div>
+      <ul class="paywall-features">
+        <li>Mensajes ilimitados</li>
+        <li>Respuestas personalizadas</li>
+        <li>Historial guardado</li>
+        <li>Sin publicidad</li>
+      </ul>
       <div class="paywall-methods">💳 Paga con PSE, Nequi, Tarjetas o Efecty</div>
       <button class="paywall-btn" id="pay-btn" onclick="iniciarPago()">Pagar con Mercado Pago</button>
     </div>
@@ -73,7 +479,10 @@
   <div class="chat-messages" id="messages"></div>
 
   <!-- Indicador de Escritura -->
-  <div class="typing" id="typing">Valeria está escribiendo...</div>
+  <div class="typing" id="typing">
+    <span>Valeria está escribiendo</span>
+    <span class="typing-dots"><span></span><span></span><span></span></span>
+  </div>
 
   <!-- Entrada de Texto -->
   <form class="chat-input" id="chat-form">
@@ -81,88 +490,282 @@
     <button type="submit" id="send-btn">Enviar</button>
   </form>
 
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
   <script>
+    /* =========================================================
+       INICIALIZACIÓN DE TELEGRAM
+       ========================================================= */
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.expand();
       tg.ready();
+      // Color del header de Telegram según el tema
+      try {
+        tg.setHeaderColor('#1e293b');
+        tg.setBackgroundColor('#0f172a');
+      } catch (e) {}
     }
 
-    const socket = io();
-    let currentTelegramId = null;
+    /* =========================================================
+       ESTADO GLOBAL
+       ========================================================= */
+    const state = {
+      socket: null,
+      initData: tg?.initData || '',
+      isSubscribed: false,
+      isConnected: false,
+      typingTimeout: null,
+      messageQueue: []
+    };
 
-    const messages = document.getElementById('messages');
-    const input = document.getElementById('user-input');
-    const sendBtn = document.getElementById('send-btn');
-    const paywall = document.getElementById('paywall');
-    const payBtn = document.getElementById('pay-btn');
-    const typing = document.getElementById('typing');
+    /* =========================================================
+       REFERENCIAS DOM
+       ========================================================= */
+    const $ = (id) => document.getElementById(id);
+    const messages = $('messages');
+    const input = $('user-input');
+    const sendBtn = $('send-btn');
+    const paywall = $('paywall');
+    const payBtn = $('pay-btn');
+    const typing = $('typing');
+    const toast = $('toast');
+    const connectionBanner = $('connection-banner');
+    const botStatus = $('bot-status');
+    const botStatusText = $('bot-status-text');
 
+    /* =========================================================
+       UTILIDADES
+       ========================================================= */
     function scrollToBottom() {
-      messages.scrollTop = messages.scrollHeight;
+      requestAnimationFrame(() => {
+        messages.scrollTop = messages.scrollHeight;
+      });
     }
 
-    function agregarMensaje(texto, tipo) {
+    function mostrarToast(msg, duration = 2500) {
+      toast.textContent = msg;
+      toast.classList.add('visible');
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => toast.classList.remove('visible'), duration);
+    }
+
+    function setBotStatus(online) {
+      botStatus.className = online ? '' : 'offline';
+      botStatusText.textContent = online ? 'En línea' : 'Desconectada';
+    }
+
+    function showConnectionBanner(show) {
+      connectionBanner.classList.toggle('visible', show);
+    }
+
+    /* =========================================================
+       MENSAJES
+       ========================================================= */
+    function agregarMensaje(texto, tipo = 'bot', options = {}) {
       const msgDiv = document.createElement('div');
       msgDiv.className = `message ${tipo}`;
       msgDiv.textContent = texto;
+
+      // Hora del mensaje
+      if (options.showTime !== false) {
+        const time = document.createElement('span');
+        time.className = 'message-time';
+        time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        msgDiv.appendChild(time);
+      }
+
       messages.appendChild(msgDiv);
       scrollToBottom();
     }
 
-    // Inicialización del usuario
-    async function initApp() {
-      const initData = tg?.initData || '';
-
-      try {
-        const res = await fetch('/api/user-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telegramInitData: initData })
-        });
-
-        const data = await res.json();
-
-        if (data.user) {
-          currentTelegramId = data.user.id;
-          socket.emit('autenticar', { telegramId: currentTelegramId });
-
-          if (!data.isSubscribed) {
-            bloquearChat();
-          } else {
-            desbloquearChat();
-          }
-        }
-      } catch (err) {
-        console.error('Error al iniciar la Mini App:', err);
-      }
+    function mostrarTyping(show) {
+      typing.classList.toggle('visible', show);
+      if (show) scrollToBottom();
     }
 
+    /* =========================================================
+       BLOQUEO/DESBLOQUEO DEL CHAT
+       ========================================================= */
     function bloquearChat() {
-      paywall.style.display = 'flex';
+      paywall.classList.add('visible');
       input.disabled = true;
       sendBtn.disabled = true;
+      state.isSubscribed = false;
     }
 
     function desbloquearChat() {
-      paywall.style.display = 'none';
+      paywall.classList.remove('visible');
       input.disabled = false;
       sendBtn.disabled = false;
+      state.isSubscribed = true;
     }
 
-    // Procesar pago con Mercado Pago
-    async function iniciarPago() {
-      if (!currentTelegramId) return alert('No se detectó un usuario válido de Telegram.');
+    function cerrarPaywall() {
+      paywall.classList.remove('visible');
+      // Aunque cierre, el chat queda bloqueado
+    }
 
-      payBtn.textContent = 'Generando pago...';
+    /* =========================================================
+       API: OBTENER ESTADO DEL USUARIO
+       ========================================================= */
+    async function fetchUserStatus() {
+      const res = await fetch('/api/user-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramInitData: state.initData })
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    }
+
+    /* =========================================================
+       SOCKET.IO - CONEXIÓN Y EVENTOS
+       ========================================================= */
+    function initSocket() {
+      const socket = io({
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
+      });
+
+      state.socket = socket;
+
+      /* --- Conexión --- */
+      socket.on('connect', () => {
+        state.isConnected = true;
+        setBotStatus(true);
+        showConnectionBanner(false);
+
+        // Autenticar
+        socket.emit('autenticar', { telegramInitData: state.initData });
+
+        // Enviar mensajes en cola
+        while (state.messageQueue.length > 0) {
+          const msg = state.messageQueue.shift();
+          socket.emit('mensaje_usuario', { texto: msg });
+        }
+      });
+
+      socket.on('disconnect', () => {
+        state.isConnected = false;
+        setBotStatus(false);
+        showConnectionBanner(true);
+        mostrarTyping(false);
+      });
+
+      socket.on('reconnect_attempt', () => {
+        showConnectionBanner(true);
+      });
+
+      socket.on('reconnect', () => {
+        showConnectionBanner(false);
+        mostrarToast('✅ Reconectado');
+      });
+
+      socket.on('connect_error', (err) => {
+        console.warn('Socket connect_error:', err.message);
+        state.isConnected = false;
+        setBotStatus(false);
+        showConnectionBanner(true);
+      });
+
+      /* --- Autenticación --- */
+      socket.on('error_auth', (msg) => {
+        console.error('Error de autenticación:', msg);
+        bloquearChat();
+        mostrarToast('⚠️ Sesión inválida');
+      });
+
+      /* --- Estado de suscripción --- */
+      socket.on('status_suscripcion', (data) => {
+        if (data.active) {
+          desbloquearChat();
+        } else {
+          bloquearChat();
+        }
+      });
+
+      /* --- Historial --- */
+      socket.on('cargar_historial', (historial) => {
+        messages.innerHTML = '';
+
+        if (!historial || historial.length === 0) {
+          agregarMensaje(
+            '¡Hola! 😊 Soy Valeria. Me alegra mucho hablar contigo. ¿Cómo va tu día?',
+            'bot',
+            { showTime: false }
+          );
+        } else {
+          historial.forEach((msg) => {
+            agregarMensaje(
+              msg.content,
+              msg.role === 'user' ? 'user' : 'bot',
+              { showTime: false }
+            );
+          });
+        }
+      });
+
+      /* --- Respuesta del bot --- */
+      socket.on('respuesta_bot', (data) => {
+        mostrarTyping(false);
+        const texto = typeof data === 'string' ? data : (data.texto || data.content || '');
+        if (texto) agregarMensaje(texto, 'bot');
+      });
+
+      /* --- Typing --- */
+      socket.on('typing', (isTyping) => {
+        mostrarTyping(isTyping);
+        // Safety: forzar apagado tras 15s
+        if (isTyping) {
+          clearTimeout(state.typingTimeout);
+          state.typingTimeout = setTimeout(() => mostrarTyping(false), 15000);
+        }
+      });
+
+      /* --- Errores generales del servidor --- */
+      socket.on('error_servidor', (msg) => {
+        mostrarToast('⚠️ ' + (msg || 'Error del servidor'));
+        mostrarTyping(false);
+      });
+    }
+
+    /* =========================================================
+       ENVÍO DE MENSAJES
+       ========================================================= */
+    function enviarMensaje(texto) {
+      agregarMensaje(texto, 'user');
+      mostrarTyping(true);
+
+      if (state.socket && state.isConnected) {
+        state.socket.emit('mensaje_usuario', { texto });
+      } else {
+        state.messageQueue.push(texto);
+        mostrarToast('📡 Mensaje en cola hasta reconectar');
+      }
+    }
+
+    /* =========================================================
+       PAYWALL: PAGO
+       ========================================================= */
+    async function iniciarPago() {
       payBtn.disabled = true;
+      const originalText = payBtn.textContent;
+      payBtn.textContent = 'Generando pago...';
 
       try {
         const res = await fetch('/api/crear-preferencia', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telegramId: currentTelegramId })
+          body: JSON.stringify({ telegramInitData: state.initData })
         });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json();
 
@@ -173,61 +776,74 @@
             window.location.href = data.init_point;
           }
         } else {
-          alert('Error al generar el enlace de pago.');
+          mostrarToast('❌ Error al generar el pago');
         }
       } catch (e) {
-        alert('Error al conectar con la pasarela de pago.');
+        console.error('Error pago:', e);
+        mostrarToast('❌ Error de conexión con la pasarela');
       } finally {
-        payBtn.textContent = 'Pagar con Mercado Pago';
+        payBtn.textContent = originalText;
         payBtn.disabled = false;
       }
     }
 
-    // Eventos de Socket.io
-    socket.on('status_suscripcion', (data) => {
-      if (data.active) {
-        desbloquearChat();
-      } else {
-        bloquearChat();
-      }
-    });
-
-    socket.on('cargar_historial', (historial) => {
-      messages.innerHTML = '';
-      if (!historial || historial.length === 0) {
-        agregarMensaje('¡Hola! 😊 Soy Valeria. Me alegra mucho hablar contigo. ¿Cómo va tu día?', 'bot');
-      } else {
-        historial.forEach((msg) => {
-          agregarMensaje(msg.content, msg.role === 'user' ? 'user' : 'bot');
-        });
-      }
-    });
-
-    socket.on('respuesta_bot', (data) => {
-      typing.style.display = 'none';
-      agregarMensaje(data.texto, 'bot');
-    });
-
-    socket.on('typing', (isTyping) => {
-      typing.style.display = isTyping ? 'block' : 'none';
-      if (isTyping) scrollToBottom();
-    });
-
-    // Envío de mensaje
-    document.getElementById('chat-form').addEventListener('submit', (e) => {
+    /* =========================================================
+       FORMULARIO DE CHAT
+       ========================================================= */
+    $('chat-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const texto = input.value.trim();
-      if (!texto) return;
+      if (!texto || !state.isSubscribed) return;
 
-      agregarMensaje(texto, 'user');
-      socket.emit('mensaje_usuario', { texto });
-
+      enviarMensaje(texto);
       input.value = '';
-      typing.style.display = 'block';
-      scrollToBottom();
+      input.focus();
     });
 
+    /* =========================================================
+       INICIALIZACIÓN DE LA APP
+       ========================================================= */
+    async function initApp() {
+      // Mensaje inicial mientras carga
+      agregarMensaje('Conectando con Valeria...', 'system', { showTime: false });
+
+      try {
+        const data = await fetchUserStatus();
+
+        messages.innerHTML = ''; // Limpiar mensaje de sistema
+
+        if (!data.user) {
+          agregarMensaje('❌ Usuario no autenticado', 'system');
+          bloquearChat();
+          return;
+        }
+
+        // Iniciar socket
+        initSocket();
+
+        // Verificar suscripción
+        if (data.isSubscribed) {
+          desbloquearChat();
+        } else {
+          bloquearChat();
+        }
+      } catch (err) {
+        console.error('Error initApp:', err);
+        messages.innerHTML = '';
+        agregarMensaje('❌ No se pudo conectar al servidor. Verifica tu conexión.', 'system');
+        bloquearChat();
+        setBotStatus(false);
+      }
+    }
+
+    /* =========================================================
+       ARRANCAR
+       ========================================================= */
     initApp();
+
+    // Exponer funciones al HTML (por si se usan en onclick)
+    window.iniciarPago = iniciarPago;
+    window.cerrarPaywall = cerrarPaywall;
   </script>
 </body>
 </html>

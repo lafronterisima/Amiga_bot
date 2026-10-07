@@ -29,10 +29,8 @@ const processedPayments = new Set();
 
 // --- FUNCIONES DE UTILIDAD ---
 
-// Validar firma criptográfica oficial de Telegram Web App (con fallback para pruebas en navegador)
 function verifyTelegramWebAppData(telegramInitData) {
   if (!telegramInitData || telegramInitData.trim() === '') {
-    // Si estás probando localmente en la PC fuera de Telegram
     if (process.env.NODE_ENV !== 'production') {
       return { id: 123456789, first_name: 'DevUser', username: 'devuser' };
     }
@@ -72,7 +70,6 @@ function verifyTelegramWebAppData(telegramInitData) {
   }
 }
 
-// Verificar suscripción activa (CORREGIDO: usando .maybeSingle())
 async function checkActiveSubscription(telegramId) {
   try {
     const { data: user } = await supabase
@@ -88,7 +85,7 @@ async function checkActiveSubscription(telegramId) {
       .select('status, current_period_end')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .maybeSingle(); // CORRECCIÓN CLAVE: evita error cuando no hay registros
+      .maybeSingle();
 
     if (!sub) return false;
     return new Date(sub.current_period_end) > new Date();
@@ -155,14 +152,15 @@ app.post('/api/crear-preferencia', async (req, res) => {
       }
     });
 
-    res.json({ init_point: preference.init_point });
+    const initPoint = preference.init_point || preference.sandbox_init_point;
+    res.json({ init_point: initPoint });
   } catch (error) {
     console.error('Error creando preferencia en Mercado Pago:', error);
     res.status(500).json({ error: 'Error al generar preferencia de pago' });
   }
 });
 
-// WEBHOOK OPTIMIZADO
+// WEBHOOK MERCADO PAGO
 app.post('/api/webhook/mercadopago', async (req, res) => {
   res.sendStatus(200);
 
@@ -226,7 +224,6 @@ io.on('connection', (socket) => {
     socket.telegramId = tgUser.id;
     socket.join(`user_${tgUser.id}`);
 
-    // Asegurar que el usuario existe en BD
     await supabase.from('users').upsert({
       telegram_id: tgUser.id,
       first_name: tgUser.first_name || 'Usuario',
@@ -234,7 +231,6 @@ io.on('connection', (socket) => {
       username: tgUser.username || ''
     }, { onConflict: 'telegram_id' });
 
-    // Cargar historial inicial
     const { data: messages } = await supabase
       .from('chat_messages')
       .select('role, content, created_at')
@@ -257,7 +253,6 @@ io.on('connection', (socket) => {
     }
 
     try {
-      // 1. Guardar mensaje de usuario
       await supabase.from('chat_messages').insert({
         telegram_id: telegramId,
         role: 'user',
@@ -266,7 +261,6 @@ io.on('connection', (socket) => {
 
       socket.emit('typing', true);
 
-      // 2. Obtener historial reciente
       const { data: history } = await supabase
         .from('chat_messages')
         .select('role, content')
@@ -284,7 +278,6 @@ io.on('connection', (socket) => {
         content: m.content
       }));
 
-      // 3. Generar respuesta con OpenAI
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [systemPrompt, ...formattedHistory],
@@ -293,7 +286,6 @@ io.on('connection', (socket) => {
 
       const respuestaBot = completion.choices[0].message.content;
 
-      // 4. Guardar respuesta del asistente
       await supabase.from('chat_messages').insert({
         telegram_id: telegramId,
         role: 'assistant',

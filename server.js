@@ -10,8 +10,13 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
+
+// Configuración de Socket.io con CORS para Telegram
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 app.use(express.json());
@@ -36,7 +41,7 @@ function verifyTelegramWebAppData(telegramInitData) {
     }
     return null;
   }
-  
+
   try {
     const urlParams = new URLSearchParams(telegramInitData);
     const hash = urlParams.get('hash');
@@ -54,7 +59,7 @@ function verifyTelegramWebAppData(telegramInitData) {
     const secretKey = crypto.createHmac('sha256', 'WebAppData')
       .update(process.env.TELEGRAM_BOT_TOKEN)
       .digest();
-      
+
     const calculatedHash = crypto.createHmac('sha256', secretKey)
       .update(dataCheckString)
       .digest('hex');
@@ -95,7 +100,36 @@ async function checkActiveSubscription(telegramId) {
   }
 }
 
-// --- RUTAS API ---
+async function handleUserAuth(socket, telegramInitData) {
+  const tgUser = verifyTelegramWebAppData(telegramInitData);
+
+  if (!tgUser) {
+    socket.emit('error_auth', 'Autenticación fallida');
+    return null;
+  }
+
+  socket.telegramId = tgUser.id;
+  socket.join(`user_${tgUser.id}`);
+
+  await supabase.from('users').upsert({
+    telegram_id: tgUser.id,
+    first_name: tgUser.first_name || 'Usuario',
+    last_name: tgUser.last_name || '',
+    username: tgUser.username || ''
+  }, { onConflict: 'telegram_id' });
+
+  const { data: messages } = await supabase
+    .from('chat_messages')
+    .select('role, content, created_at')
+    .eq('telegram_id', tgUser.id)
+    .order('created_at', { ascending: true })
+    .limit(30);
+
+  socket.emit('cargar_historial', messages || []);
+  return tgUser;
+}
+
+// --- RUTAS API REST ---
 
 app.post('/api/user-status', async (req, res) => {
   try {
@@ -212,33 +246,16 @@ app.post('/api/webhook/mercadopago', async (req, res) => {
 
 // --- COMUNICACIÓN SOCKET.IO ---
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
+  // Autenticación implícita mediante handshake
+  const initialInitData = socket.handshake.auth?.telegramInitData;
+  if (initialInitData) {
+    await handleUserAuth(socket, initialInitData);
+  }
 
+  // Autenticación explícita emitida por el cliente
   socket.on('autenticar', async ({ telegramInitData }) => {
-    const tgUser = verifyTelegramWebAppData(telegramInitData);
-
-    if (!tgUser) {
-      return socket.emit('error_auth', 'Autenticación fallida');
-    }
-
-    socket.telegramId = tgUser.id;
-    socket.join(`user_${tgUser.id}`);
-
-    await supabase.from('users').upsert({
-      telegram_id: tgUser.id,
-      first_name: tgUser.first_name || 'Usuario',
-      last_name: tgUser.last_name || '',
-      username: tgUser.username || ''
-    }, { onConflict: 'telegram_id' });
-
-    const { data: messages } = await supabase
-      .from('chat_messages')
-      .select('role, content, created_at')
-      .eq('telegram_id', tgUser.id)
-      .order('created_at', { ascending: true })
-      .limit(30);
-
-    socket.emit('cargar_historial', messages || []);
+    await handleUserAuth(socket, telegramInitData);
   });
 
   socket.on('mensaje_usuario', async ({ texto }) => {

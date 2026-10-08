@@ -2,37 +2,96 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Valeria - Amiga Virtual</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
     
-    /* Header */
-    header { background: #1e293b; padding: 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; }
+    body { 
+      background-color: #0f172a; 
+      color: #f8fafc; 
+      display: flex; 
+      flex-direction: column; 
+      /* Soporte para dvh (Dynamic Viewport Height) en móviles */
+      height: 100vh;
+      height: 100dvh; 
+      overflow: hidden; 
+    }
+    
+    /* Header con soporte para Notch / Safe Area Top */
+    header { 
+      background: #1e293b; 
+      padding: 15px; 
+      padding-top: max(15px, env(safe-area-inset-top));
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      border-bottom: 1px solid #334155; 
+      flex-shrink: 0;
+    }
     .avatar-info { display: flex; align-items: center; gap: 12px; }
     .avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #8b5cf6); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
     .status-text h2 { font-size: 16px; font-weight: 600; }
     .status-text span { font-size: 12px; color: #10b981; }
 
     /* Chat Area */
-    #chat-container { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .msg { max-width: 80%; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+    #chat-container { 
+      flex: 1; 
+      padding: 15px; 
+      overflow-y: auto; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 12px; 
+      -webkit-overflow-scrolling: touch;
+    }
+    .msg { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
     .msg.user { align-self: flex-end; background: #6366f1; color: #ffffff; border-bottom-right-radius: 4px; }
     .msg.assistant { align-self: flex-start; background: #334155; color: #f1f5f9; border-bottom-left-radius: 4px; }
     
-    .typing { font-size: 12px; color: #94a3b8; font-style: italic; align-self: flex-start; margin-left: 5px; }
+    .typing { font-size: 12px; color: #94a3b8; font-style: italic; align-self: flex-start; margin-left: 5px; padding: 4px 0; }
 
-    /* Input Footer */
-    footer { padding: 15px; background: #1e293b; border-top: 1px solid #334155; display: flex; gap: 10px; }
-    input { flex: 1; background: #0f172a; border: 1px solid #334155; padding: 12px 16px; border-radius: 25px; color: #fff; font-size: 14px; outline: none; }
+    /* Input Footer con soporte para Safe Area Bottom (Gesto de inicio en iOS/Android) */
+    footer { 
+      padding: 12px 15px; 
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      background: #1e293b; 
+      border-top: 1px solid #334155; 
+      display: flex; 
+      gap: 10px; 
+      flex-shrink: 0;
+    }
+    input { 
+      flex: 1; 
+      background: #0f172a; 
+      border: 1px solid #334155; 
+      padding: 12px 16px; 
+      border-radius: 25px; 
+      color: #fff; 
+      font-size: 16px; /* Evita el auto-zoom automático en iOS Safari */
+      outline: none; 
+    }
     input:focus { border-color: #6366f1; }
-    button { background: #6366f1; color: white; border: none; padding: 12px 20px; border-radius: 25px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-    button:hover { background: #4f46e5; }
+    button { 
+      background: #6366f1; 
+      color: white; 
+      border: none; 
+      padding: 12px 20px; 
+      border-radius: 25px; 
+      font-weight: 600; 
+      cursor: pointer; 
+      transition: background 0.2s, transform 0.1s; 
+    }
+    button:active { transform: scale(0.96); background: #4f46e5; }
 
-    /* Paywall Modal Overlay */
+    /* Modal Paywall */
     #paywall-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.95); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100; }
     .paywall-card { background: #1e293b; border: 1px solid #334155; padding: 30px; border-radius: 20px; text-align: center; max-width: 360px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
     .paywall-card h3 { font-size: 22px; margin-bottom: 10px; color: #f43f5e; }
@@ -55,17 +114,17 @@
     </div>
   </header>
 
-  <!-- Chat Messages Area -->
+  <!-- Contenedor del Chat -->
   <div id="chat-container"></div>
   <div id="typing-indicator" class="typing hidden">Valeria está escribiendo...</div>
 
-  <!-- Input Bar -->
+  <!-- Barra de entrada de texto -->
   <footer>
     <input type="text" id="msg-input" placeholder="Escribe un mensaje..." autocomplete="off" />
     <button id="send-btn">Enviar</button>
   </footer>
 
-  <!-- Paywall Modal -->
+  <!-- Modal Paywall -->
   <div id="paywall-modal" class="hidden">
     <div class="paywall-card">
       <h3>👑 Acceso Premium Requerido</h3>
@@ -78,7 +137,7 @@
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initData) {
       tg.ready();
-      tg.expand();
+      tg.expand(); // Expandir la WebApp a pantalla completa
     }
 
     const socket = io();
@@ -89,7 +148,14 @@
     const paywallModal = document.getElementById('paywall-modal');
     const payBtn = document.getElementById('pay-btn');
 
-    // Inicializar app consultando el estado del usuario
+    // Función para auto-scroll suave al final del chat
+    function scrollToBottom() {
+      requestAnimationFrame(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      });
+    }
+
+    // Inicializar estado del usuario
     async function initApp() {
       const initData = tg?.initData || "";
 
@@ -103,7 +169,6 @@
         const data = await res.json();
 
         if (data.user) {
-          // Autenticar conexión por Socket.io
           socket.emit('autenticar', { telegramInitData: initData });
 
           if (!data.isSubscribed) {
@@ -117,19 +182,24 @@
       }
     }
 
-    // Renderizar mensaje
+    // Agregar mensaje en pantalla
     function appendMessage(role, content) {
       const msgDiv = document.createElement('div');
       msgDiv.className = `msg ${role}`;
       msgDiv.textContent = content;
       chatContainer.appendChild(msgDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+      scrollToBottom();
     }
 
-    // Enviar mensaje del usuario
+    // Enviar mensaje
     function sendMessage() {
       const text = msgInput.value.trim();
       if (!text) return;
+
+      // Vibración háptica nativa de Telegram al enviar
+      if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+      }
 
       appendMessage('user', text);
       socket.emit('mensaje_usuario', { texto: text });
@@ -137,9 +207,19 @@
     }
 
     sendBtn.addEventListener('click', sendMessage);
-    msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    msgInput.addEventListener('keypress', (e) => { 
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage(); 
+      }
+    });
 
-    // --- BOTÓN DE PAGO ACTUALIZADO PARA MERCADO PAGO ---
+    // Ajuste al enfocar el input en móviles (Scroll hacia el final)
+    msgInput.addEventListener('focus', () => {
+      setTimeout(scrollToBottom, 300);
+    });
+
+    // Botón de Pago Mercado Pago
     payBtn.addEventListener('click', async () => {
       payBtn.disabled = true;
       payBtn.textContent = 'Generando checkout...';
@@ -156,17 +236,16 @@
         const data = await res.json();
 
         if (data.init_point) {
-          // Si estamos dentro de la Web App de Telegram, abrir enlace externo
           if (tg && tg.initData && tg.openLink) {
             tg.openLink(data.init_point);
           } else {
             window.location.href = data.init_point;
           }
         } else {
-          alert('No se pudo generar la preferencia de pago de Mercado Pago');
+          alert('No se pudo generar la preferencia de pago');
         }
       } catch (err) {
-        console.error('Error procesando pago con Mercado Pago:', err);
+        console.error('Error procesando pago:', err);
         alert('Ocurrió un error al conectar con la pasarela de pago');
       } finally {
         payBtn.disabled = false;
@@ -174,23 +253,28 @@
       }
     });
 
-    // --- EVENTOS SOCKET.IO SINCRONIZADOS CON EL BACKEND ---
+    // Eventos de Socket.io
     socket.on('cargar_historial', (messages) => {
       chatContainer.innerHTML = '';
       messages.forEach(m => {
         const role = m.role === 'assistant' || m.role === 'bot' ? 'assistant' : 'user';
         appendMessage(role, m.content);
       });
+      scrollToBottom();
     });
 
     socket.on('respuesta_bot', (data) => {
+      // Vibración háptica suave cuando responde la IA
+      if (tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+      }
       appendMessage('assistant', data.texto);
     });
 
     socket.on('typing', (isTyping) => {
       if (isTyping) typingIndicator.classList.remove('hidden');
       else typingIndicator.classList.add('hidden');
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+      scrollToBottom();
     });
 
     socket.on('status_suscripcion', (data) => {

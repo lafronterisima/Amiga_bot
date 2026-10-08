@@ -9,7 +9,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- Socket.io -->
   <script src="/socket.io/socket.io.js"></script>
-  <!-- FontAwesome para 赤conos n赤tidos -->
+  <!-- FontAwesome para iconos nitidos -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <style>
@@ -132,7 +132,7 @@
       <div class="avatar">V</div>
       <div class="status-text">
         <h2>Valeria</h2>
-        <span><i class="status-dot"></i> En l赤nea</span>
+        <span><i class="status-dot"></i> En linea</span>
       </div>
     </div>
   </header>
@@ -140,7 +140,7 @@
   <!-- Contenedor del Chat -->
   <div id="chat-container"></div>
   <div id="typing-indicator" class="typing hidden">
-    <i class="fa-solid fa-circle-notch fa-spin"></i> Valeria est芍 escribiendo...
+    <i class="fa-solid fa-circle-notch fa-spin"></i> Valeria esta escribiendo...
   </div>
 
   <!-- Barra de entrada de texto -->
@@ -159,7 +159,7 @@
         <i class="fa-solid fa-lock"></i>
       </div>
       <h3>Acceso Premium Requerido</h3>
-      <p>Para platicar con Valeria necesitas activar tu membres赤a mensual.</p>
+      <p>Para platicar con Valeria necesitas activar tu membresia mensual.</p>
       <button class="btn-pay" id="pay-btn">
         <i class="fa-solid fa-credit-card"></i> Suscribirme Ahora
       </button>
@@ -167,7 +167,7 @@
   </div>
 
   <script>
-    // Inicializaci車n del SDK de Telegram
+    // Inicializacion del SDK de Telegram
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.ready();
@@ -181,7 +181,7 @@
     const paywallModal = document.getElementById('paywall-modal');
     const payBtn = document.getElementById('pay-btn');
 
-    // Conexi車n Socket.io pasando autenticaci車n inicial
+    // Conexion Socket.io pasando autenticacion inicial
     const socket = io({
       auth: {
         telegramInitData: tg?.initData || ''
@@ -212,7 +212,7 @@
         const data = await res.json();
 
         if (data.user) {
-          // Emitir autenticaci車n por socket
+          // Emitir autenticacion por socket
           socket.emit('autenticar', { telegramInitData: initData });
 
           if (!data.isSubscribed) {
@@ -221,7 +221,7 @@
             paywallModal.classList.add('hidden');
           }
         } else {
-          // Si no hay usuario devuelto, activar pantalla de suscripci車n/bloqueo
+          // Si no hay usuario devuelto, activar pantalla de suscripcion/bloqueo
           paywallModal.classList.remove('hidden');
         }
       } catch (e) {
@@ -265,7 +265,7 @@
       setTimeout(scrollToBottom, 300);
     });
 
-    // Bot車n de Pago
+    // Boton de Pago
     payBtn.addEventListener('click', async () => {
       payBtn.disabled = true;
       payBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando checkout...';
@@ -292,7 +292,7 @@
         }
       } catch (err) {
         console.error('Error procesando pago:', err);
-        alert('Ocurri車 un error al conectar con la pasarela de pago');
+        alert('Ocurrio un error al conectar con la pasarela de pago');
       } finally {
         payBtn.disabled = false;
         payBtn.innerHTML = '<i class="fa-solid fa-credit-card"></i> Suscribirme Ahora';
@@ -331,11 +331,11 @@
     });
 
     socket.on('error_auth', (msg) => {
-      console.warn('Error de autenticaci車n:', msg);
+      console.warn('Error de autenticacion:', msg);
       paywallModal.classList.remove('hidden');
     });
 
-    // Garantizar que la app inicie solo cuando el DOM est谷 listo
+    // Garantizar que la app inicie solo cuando el DOM este listo
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initApp);
     } else {
